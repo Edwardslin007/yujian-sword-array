@@ -1,9 +1,10 @@
-// 隔空御剑 · 自动演示页（v10）：无摄像头、无手势识别。
-// 复用主程序的特效引擎（Director/PostFX/自适应画质），按时间表依次强制
-// 阵型：握拳 → 点赞 → 金属礼 → 敬礼 → 比心，每个 10 秒；一轮播完后
-// 永久停留在"我❤️钱塘"（比心）。
-// 左下角只展示手势动作名称（当前项高亮）。
-// URL：?t=秒数 —— 从时间线第 t 秒直接预滚启动（确定性，调试/跳播用）。
+// 隔空御剑 · 自动演示页（v10g）：无摄像头、无手势识别。
+// 开场（电影穿越式标题）：镜头自 999 剑排成的光隧道中加速飞出 →
+// 白光一闪 →「隔空御剑·万剑归宗」光爆破现并轻微震动 → 光散后
+// 无缝接入手势轮播：握拳 → 点赞 → 金属礼 → 敬礼 → 比心 各 10s，
+// 一轮播完后永久停留在"我❤️钱塘"。左下角只展示手势动作名称。
+// URL：?t=秒数 —— 跳过标题，直接从手势时间线第 t 秒预滚启动（调试/跳播）。
+// 点击页面任意处：从头重播（含标题穿越）。
 import * as THREE from 'three';
 import { FX } from './fx.config.js';
 import { Director } from './fx/director.js';
@@ -11,8 +12,8 @@ import { PostFX } from './fx/postfx.js';
 
 const qs = new URLSearchParams(location.search);
 const tOffset = parseFloat(qs.get('t') || '0') || 0;
+const FLASH_T = 2.2;        // 标题穿越阶段时长（秒，墙钟）——白闪交还给实况
 
-// 演示时间表（末项停留）
 const SEQ = [
   { key: 'FIST',         label: '握拳' },
   { key: 'THUMB_UP',     label: '点赞' },
@@ -105,13 +106,86 @@ class AdaptiveQuality {
 }
 
 let director, postfx, quality, ready = false;
-
-// ---------------- 时间线：idx = min(⌊t/10⌋, 末项)；切换即强制阵型 ----------------
-let virtualT = 0;
+let phase = 'title';        // 'title'（穿越+标题） | 'live'（手势轮播）
+let titleT = 0;             // 标题阶段计时（墙钟秒）
+let flashed = false;
+let virtualT = 0;           // 手势时间线（秒，flash 时刻起算）
 let curIdx = -1;
+
+// ---------------- 穿越隧道：999 剑沿镜头路径排成光隧道 ----------------
+function initTunnel() {
+  const v = director.volley;
+  for (let i = 0; i < v.swordTotal; i++) {
+    const u = i / v.swordTotal;
+    const z = -62 + u * 128 + (Math.random() - 0.5) * 4;
+    const ang = i * 2.39996;
+    const r = 4.5 + (i % 6) * 2.6 + Math.random() * 2.5;
+    v.positions[i].set(Math.cos(ang) * r, 3 + Math.sin(ang) * r * 0.72, z);
+    v.velocities[i].set(0, 0, 0);
+  }
+  writeTunnelMatrices(0);
+}
+function writeTunnelMatrices(t) {
+  const v = director.volley;
+  const dummy = v.dummy;
+  for (let i = 0; i < v.swordTotal; i++) {
+    const p = v.positions[i];
+    const swirl = t * 0.5 + i * 0.35;
+    dummy.position.set(
+      p.x + Math.sin(swirl) * 0.4,
+      p.y + Math.cos(swirl * 0.8) * 0.3,
+      p.z);
+    dummy.lookAt(dummy.position.x, dummy.position.y, dummy.position.z + (i % 2 ? 3 : -3));
+    dummy.scale.set(1.25, 1.25, 1.25);
+    dummy.updateMatrix();
+    v.mesh.setMatrixAt(i, dummy.matrix);
+    v.aura.setMatrixAt(i, dummy.matrix);
+  }
+  v.mesh.instanceMatrix.needsUpdate = true;
+  v.aura.instanceMatrix.needsUpdate = true;
+}
+// 镜头沿隧道加速飞行（ease-in：越飞越快，甩进白闪）
+function cameraFly(t) {
+  const u = Math.min(t / FLASH_T, 1);
+  const z = -54 + 104 * u * u;
+  camera.position.set(Math.sin(t * 2.4) * 1.6, 3 + Math.cos(t * 1.7) * 1.1, z);
+  camera.lookAt(camera.position.x * 0.4, camera.position.y * 0.4, z + 24);
+  const fov = 62 + 22 * u;
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+}
+// 白闪交接：硬切藏进闪光里，标题光爆破现，世界交给实况（剑群聚向握拳剑球）
+function enterLive() {
+  const f = $('flash');
+  f.classList.add('on');
+  setTimeout(() => f.classList.remove('on'), 60);
+  $('title-card').classList.add('show');
+  director.forceGesture = SEQ[0].key;
+  virtualT = 0;
+  curIdx = -1;
+  phase = 'live';
+}
+// 从头重播（含标题穿越）
+function restart() {
+  phase = 'title';
+  titleT = 0;
+  flashed = false;
+  virtualT = 0;
+  curIdx = -1;
+  director.forceGesture = null;
+  if (director.volley._tinted) director.volley._tintSwords(null);   // 还原红心剑
+  initTunnel();
+  const tc = $('title-card');
+  tc.classList.remove('show');
+  void tc.offsetWidth;                    // 强制重排，重置 CSS 动画
+  const f = $('flash');
+  f.classList.remove('on');
+  for (const r of rows) r.classList.remove('on');
+  for (const s of segFills) s.style.width = '0%';
+}
+
+// ---------------- 手势时间线（flash 时刻起算） ----------------
 const segFills = [...document.querySelectorAll('#demo-progress .seg i')];
 function updateProgress() {
-  // 分段进度：走完的段满格，当前段按段内时间填充，末段随停留保持满格
   const segIdx = Math.min(Math.floor(virtualT / STEP_SEC), SEQ.length - 1);
   for (let i = 0; i < segFills.length; i++) {
     let p = 0;
@@ -120,7 +194,7 @@ function updateProgress() {
     segFills[i].style.width = (p * 100).toFixed(1) + '%';
   }
 }
-function step(dt) {
+function stepLive(dt) {
   virtualT += dt;
   const idx = Math.min(Math.floor(virtualT / STEP_SEC), SEQ.length - 1);
   if (idx !== curIdx) {
@@ -132,6 +206,7 @@ function step(dt) {
   director.update(dt, virtualT);
 }
 
+// ---------------- 启动 ----------------
 async function boot() {
   try {
     if (document.fonts) await document.fonts.ready.catch(() => {});
@@ -139,10 +214,17 @@ async function boot() {
     postfx = new PostFX(renderer, scene, camera);
     postfx.add(...director.bloomTargets());
     quality = new AdaptiveQuality(renderer, postfx, director);
-    // 预滚：?t=秒 直接把世界推到该时刻（阵型已收敛），随后继续实况
+    initTunnel();
     if (tOffset > 0) {
-      const n = Math.round(tOffset * 60);
-      for (let i = 0; i < n; i++) step(1 / 60);
+      // 跳过标题：直接从手势时间线第 tOffset 秒预滚（阵型从隧道位收敛）
+      phase = 'live';
+      flashed = true;
+      virtualT = tOffset;
+      curIdx = Math.min(Math.floor(tOffset / STEP_SEC), SEQ.length - 1);
+      director.forceGesture = SEQ[curIdx].key;
+      for (let i = 0; i < Math.round(tOffset * 60); i++) stepLive(1 / 60);
+      $('title-card').style.display = 'none';
+      $('flash').style.display = 'none';
     }
     ready = true;
     $('loading').classList.remove('on');
@@ -159,8 +241,16 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (ready && director) {
-    step(dt);
+  if (!ready) return;
+  if (phase === 'title') {
+    titleT += dt;
+    director.env.update(dt, titleT);      // 星空/灵气照常运行
+    writeTunnelMatrices(titleT);          // 隧道剑阵（自绘矩阵，不经物理）
+    cameraFly(titleT);                    // 镜头加速穿梭
+    if (titleT >= FLASH_T && !flashed) { flashed = true; enterLive(); }
+  } else {
+    virtualT += dt;
+    stepLive(dt);
     quality.tick(performance.now());
   }
   postfx.render();
@@ -186,9 +276,4 @@ addEventListener('pointermove', () => {
   clearTimeout(pointerTimer);
   pointerTimer = setTimeout(() => document.body.classList.add('cursor-off'), 2000);
 });
-// 点击任意处：从头重播一轮
-addEventListener('pointerdown', () => {
-  if (!ready) return;
-  virtualT = 0;
-  curIdx = -1;
-});
+addEventListener('pointerdown', () => { if (ready) restart(); });
