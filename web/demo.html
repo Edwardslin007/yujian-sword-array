@@ -54,7 +54,7 @@
   @keyframes tBurst { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(180); opacity: 0; } }
   #title-card .t-main { font-family: "KaiTi", "STKaiti", "Microsoft YaHei", serif; font-weight: 700;
                 font-size: clamp(44px, 8.2vw, 128px); color: #eaf8ff; letter-spacing: .14em;
-                text-shadow: 0 0 18px rgba(0,200,255,.9), 0 0 46px rgba(0,150,255,.55), 0 2px 4px rgba(0,0,0,.6);
+                text-shadow: 0 2px 8px rgba(1,8,18,.95), 0 0 18px rgba(0,200,255,.9), 0 0 46px rgba(0,150,255,.55);
                 transform: scale(1.8); filter: blur(14px); opacity: 0; }
   #title-card.show .t-main { animation: tIn .55s cubic-bezier(.16,.84,.3,1) forwards,
                 tShake .32s .6s linear, tOut .5s 3.3s ease-in forwards; }
@@ -66,8 +66,11 @@
                 80% { transform: translate(3px, 2px) scale(1); } }
   @keyframes tOut { to { opacity: 0; transform: scale(1.06); filter: blur(6px); } }
   #title-card .t-sub { margin-top: 1.4em; font-size: clamp(15px, 2.2vw, 26px);
-                color: #9fd4ff; letter-spacing: .5em; opacity: 0;
-                text-shadow: 0 0 12px rgba(0,180,255,.6); }
+                color: #e8f6ff; letter-spacing: .5em; opacity: 0;
+                text-shadow: 0 1px 3px rgba(1,8,18,.95), 0 0 10px rgba(1,8,18,.8);
+                background: rgba(3,10,22,.62); padding: .45em 1.1em .45em 1.6em;
+                border-radius: 999px; border: 1px solid rgba(0,180,255,.30);
+                backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   #title-card.show .t-sub { animation: tSubIn .8s .55s ease-out forwards, tOut .5s 3.3s ease-in forwards; }
   @keyframes tSubIn { to { opacity: .92; } }
 </style>
