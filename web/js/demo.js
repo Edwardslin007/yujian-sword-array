@@ -234,6 +234,7 @@ async function boot() {
         worldT += 1 / 60;
         stepLive(1 / 60, worldT);
       }
+      for (let i = 0; i < rows.length; i++) rows[i].classList.toggle('on', i === curIdx);   // 初始段高亮（跳段路径不会触发切换分支）
       $('title-card').style.display = 'none';
       $('flash').style.display = 'none';
     }
