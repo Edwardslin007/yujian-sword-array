@@ -109,8 +109,11 @@ let director, postfx, quality, ready = false;
 let phase = 'title';        // 'title'（穿越+标题） | 'live'（手势轮播）
 let titleT = 0;             // 标题阶段计时（墙钟秒）
 let flashed = false;
-let virtualT = 0;           // 手势时间线（秒，flash 时刻起算）
+let virtualT = 0;           // 手势时间线（秒）——片头卡淡出后才起表
+let worldT = 0;             // 世界动画时钟（永远前进，驱动阵型旋转/物理）
+let cardUntil = 0;          // 片头卡淡出完成的墙钟时刻（performance.now 基准）
 let curIdx = -1;
+const CARD_MS = 3900;       // 标题卡 CSS 动画总时长（入场+停留+淡出）
 
 // ---------------- 穿越隧道：999 剑沿镜头路径排成光隧道 ----------------
 function initTunnel() {
@@ -160,7 +163,8 @@ function enterLive() {
   setTimeout(() => f.classList.remove('on'), 60);
   $('title-card').classList.add('show');
   director.forceGesture = SEQ[0].key;
-  virtualT = 0;
+  virtualT = 0;                       // 片头卡淡出后才允许累加（见主循环）
+  cardUntil = performance.now() + CARD_MS;
   curIdx = -1;
   phase = 'live';
 }
@@ -170,6 +174,8 @@ function restart() {
   titleT = 0;
   flashed = false;
   virtualT = 0;
+  worldT = 0;
+  cardUntil = 0;
   curIdx = -1;
   director.forceGesture = null;
   if (director.volley._tinted) director.volley._tintSwords(null);   // 还原红心剑
@@ -194,8 +200,9 @@ function updateProgress() {
     segFills[i].style.width = (p * 100).toFixed(1) + '%';
   }
 }
-function stepLive(dt) {
-  virtualT += dt;
+function stepLive(dt, tWorld) {
+  // 手势时间线只在片头卡淡出后前进；世界动画时钟（tWorld）永远前进，
+  // 标题卡停留期间剑球照常聚拢旋转，只是不计时。
   const idx = Math.min(Math.floor(virtualT / STEP_SEC), SEQ.length - 1);
   if (idx !== curIdx) {
     curIdx = idx;
@@ -203,7 +210,7 @@ function stepLive(dt) {
     for (let i = 0; i < rows.length; i++) rows[i].classList.toggle('on', i === idx);
   }
   updateProgress();
-  director.update(dt, virtualT);
+  director.update(dt, tWorld);
 }
 
 // ---------------- 启动 ----------------
@@ -219,10 +226,14 @@ async function boot() {
       // 跳过标题：直接从手势时间线第 tOffset 秒预滚（阵型从隧道位收敛）
       phase = 'live';
       flashed = true;
-      virtualT = tOffset;
+      virtualT = 0;
       curIdx = Math.min(Math.floor(tOffset / STEP_SEC), SEQ.length - 1);
       director.forceGesture = SEQ[curIdx].key;
-      for (let i = 0; i < Math.round(tOffset * 60); i++) stepLive(1 / 60);
+      for (let i = 0; i < Math.round(tOffset * 60); i++) {
+        virtualT += 1 / 60;
+        worldT += 1 / 60;
+        stepLive(1 / 60, worldT);
+      }
       $('title-card').style.display = 'none';
       $('flash').style.display = 'none';
     }
@@ -249,8 +260,9 @@ function animate() {
     cameraFly(titleT);                    // 镜头加速穿梭
     if (titleT >= FLASH_T && !flashed) { flashed = true; enterLive(); }
   } else {
-    virtualT += dt;
-    stepLive(dt);
+    worldT += dt;
+    if (performance.now() >= cardUntil) virtualT += dt;   // 片头卡淡出后才开始第一段计时
+    stepLive(dt, worldT);
     quality.tick(performance.now());
   }
   postfx.render();
