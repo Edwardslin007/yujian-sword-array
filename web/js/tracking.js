@@ -192,7 +192,7 @@ export class HandTracker {
     this.stalled = false;
     this.fps = 0; this._fpsCount = 0; this._fpsT = null;
     this.status = 'init';
-    try { this._stage = (m) => dispatchEvent(new CustomEvent('yujian-stage', { detail: m })); } catch (e) { this._stage = () => {}; }
+    try { this._stage = (m) => { try { window.__yjStage = m; } catch (e) {} try { dispatchEvent(new CustomEvent('yujian-stage', { detail: m })); } catch (e) {} }; } catch (e) { this._stage = () => {}; }
     // 每帧输出的瞬时运动（归一化坐标/秒，已镜像）
     this.speed = 0; this.vx = 0; this.vy = 0;
     this.rawHands = [];         // 未镜像的 MediaPipe 点，专供摄像头预览骨骼
