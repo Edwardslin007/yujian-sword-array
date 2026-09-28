@@ -67,7 +67,20 @@ class BgmManager {
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.play(); });
     addEventListener('pointerdown', () => this.play(), { passive: true });
     addEventListener('keydown', () => this.play(), { passive: true });
+    // 浏览器拦截自动播放时，给出点击提示（音乐真正响起后撤掉）
+    this.audio.addEventListener('playing', () => this._hideHint());
     this.play();
+    setTimeout(() => { if (this.audio.paused) this._showHint(); }, 1200);
+  }
+  _showHint() {
+    if (document.getElementById('bgm-hint')) return;
+    const h = document.createElement('div');
+    h.id = 'bgm-hint';
+    h.textContent = '🔊 点击屏幕开启音乐';
+    document.body.appendChild(h);
+  }
+  _hideHint() {
+    document.getElementById('bgm-hint')?.remove();
   }
   play() {
     if (!this.audio || document.hidden) return;

@@ -40,6 +40,15 @@
              animation: spin 1.1s linear infinite; margin-bottom: 1.4em; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* BGM 自动播放被拦截时的提示角标 */
+  #bgm-hint { position: fixed; right: 18px; bottom: 18px; z-index: 18; pointer-events: none;
+              background: rgba(3,10,22,.72); border: 1px solid rgba(0,180,255,.35);
+              color: #bfe3ff; font-size: 13px; letter-spacing: .15em;
+              padding: .5em 1.1em; border-radius: 999px;
+              backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+              animation: hintPulse 1.6s ease-in-out infinite; }
+  @keyframes hintPulse { 50% { opacity: .5; } }
+
   /* ---- 电影穿越式标题（v10f）：穿梭 → 白闪 → 标题光爆破现 ---- */
   #flash { position: fixed; inset: 0; z-index: 30; background: #eaf6ff; opacity: 0;
            pointer-events: none; transition: opacity .5s ease-out; }
