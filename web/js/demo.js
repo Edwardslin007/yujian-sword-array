@@ -15,11 +15,11 @@ const tOffset = parseFloat(qs.get('t') || '0') || 0;
 const FLASH_T = 2.2;        // 标题穿越阶段时长（秒，墙钟）——白闪交还给实况
 
 const SEQ = [
-  { key: 'FIST',         label: '握拳' },
-  { key: 'THUMB_UP',     label: '点赞' },
-  { key: 'ROCK',         label: '金属礼' },
-  { key: 'SALUTE',       label: '敬礼' },
-  { key: 'FINGER_HEART', label: '比心' },
+  { key: 'FIST',         label: '握拳',   emoji: '✊' },
+  { key: 'THUMB_UP',     label: '点赞',   emoji: '👍' },
+  { key: 'ROCK',         label: '金属礼', emoji: '🤘' },
+  { key: 'SALUTE',       label: '敬礼',   emoji: '🫡' },
+  { key: 'FINGER_HEART', label: '比心',   emoji: '🫰' },
 ];
 const STEP_SEC = 10;
 const $ = (id) => document.getElementById(id);
@@ -45,10 +45,37 @@ const labelBox = $('demo-labels');
 for (const s of SEQ) {
   const row = document.createElement('div');
   row.className = 'g';
-  row.textContent = s.label;
+  row.textContent = s.label + ' ' + s.emoji;
   labelBox.appendChild(row);
 }
 const rows = [...labelBox.querySelectorAll('.g')];
+
+// ---------------- 背景音乐（自动播放；被浏览器拦截时首次点击/按键解锁） ----------------
+class BgmManager {
+  constructor() {
+    // 复用页面里的 #bgm（单文件版内联 base64），否则走相对路径（多文件部署）
+    this.audio = document.getElementById('bgm') || (() => {
+      const a = new Audio('./audio/bgm.mp3');
+      a.id = 'bgm';
+      document.body.appendChild(a);
+      return a;
+    })();
+    this.audio.loop = true;
+    this.audio.volume = 0.6;
+    this.audio.preload = 'auto';
+    this.audio.addEventListener('ended', () => this.play());
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.play(); });
+    addEventListener('pointerdown', () => this.play(), { passive: true });
+    addEventListener('keydown', () => this.play(), { passive: true });
+    this.play();
+  }
+  play() {
+    if (!this.audio || document.hidden) return;
+    if (!this.audio.paused && !this.audio.ended) return;
+    this.audio.play().catch(() => {});
+  }
+}
+let bgm = null;
 
 // ---------------- 自适应画质（主程序同款：降分辨率→关 bloom→光晕壳补偿） ----------------
 class AdaptiveQuality {
@@ -222,6 +249,7 @@ async function boot() {
     postfx.add(...director.bloomTargets());
     quality = new AdaptiveQuality(renderer, postfx, director);
     initTunnel();
+    bgm = new BgmManager();
     if (tOffset > 0) {
       // 跳过标题：直接从手势时间线第 tOffset 秒预滚（阵型从隧道位收敛）
       phase = 'live';
@@ -283,10 +311,33 @@ addEventListener('keydown', (e) => {
     else document.exitFullscreen();
   }
 });
+// 点击手势名：跳到该手势，倒计时从它重新计 10 秒（自动轮播逻辑不变）
+function jumpTo(i) {
+  if (!ready) return;
+  if (phase === 'title') {
+    // 从片头直接进入所选手势（跳过标题卡）
+    $('title-card').classList.remove('show');
+    $('flash').style.display = 'none';
+    flashed = true;
+    phase = 'live';
+  }
+  virtualT = i * STEP_SEC;
+  curIdx = i - 1;          // 让下一帧 stepLive 触发切换（setMode + 高亮）
+  updateProgress();
+}
+rows.forEach((row, i) => row.addEventListener('click', (e) => {
+  e.stopPropagation();
+  jumpTo(i);
+}));
 let pointerTimer;
 addEventListener('pointermove', () => {
   document.body.classList.remove('cursor-off');
   clearTimeout(pointerTimer);
   pointerTimer = setTimeout(() => document.body.classList.add('cursor-off'), 2000);
 });
-addEventListener('pointerdown', () => { if (ready) restart(); });
+// 点击页面空白处：从头重播（含标题穿越）；点手势名则由上方 jumpTo 处理
+addEventListener('pointerdown', (e) => {
+  if (!ready) return;
+  if (e.target && e.target.closest && e.target.closest('#demo-labels')) return;
+  restart();
+});
