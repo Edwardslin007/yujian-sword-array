@@ -192,6 +192,7 @@ export class HandTracker {
     this.stalled = false;
     this.fps = 0; this._fpsCount = 0; this._fpsT = null;
     this.status = 'init';
+    try { this._stage = (m) => dispatchEvent(new CustomEvent('yujian-stage', { detail: m })); } catch (e) { this._stage = () => {}; }
     // 每帧输出的瞬时运动（归一化坐标/秒，已镜像）
     this.speed = 0; this.vx = 0; this.vy = 0;
     this.rawHands = [];         // 未镜像的 MediaPipe 点，专供摄像头预览骨骼
@@ -236,6 +237,7 @@ export class HandTracker {
     }
     this.onHealth({ state: 'starting', msg: '' });
     try {
+      this._stage('加载手势识别引擎……');
       const { FilesetResolver, HandLandmarker } = await import('../vendor/mediapipe/vision_bundle.mjs');
       const vision = await FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');
       const make = (delegate) => HandLandmarker.createFromOptions(vision, {
@@ -243,9 +245,11 @@ export class HandTracker {
         runningMode: 'VIDEO', numHands: 2,   // 双手手势（sword-control maxNumHands 2）
         minHandDetectionConfidence: 0.5, minHandTrackingConfidence: 0.6,
       });
+      this._stage('加载手势模型（约 8MB，首次较慢）……');
       try { this.landmarker = await make('GPU'); }
       catch (e) { console.warn('GPU delegate 失败，回退 CPU', e); this.landmarker = await make('CPU'); }
       this.status = 'camera';
+      this._stage('请求摄像头权限……请在浏览器提示中点击「允许」');
 
       // 640×480：MediaPipe 内部会把输入缩到模型分辨率，高分辨率请求只增加
       // 采集/传输开销，对精度无益；CPU-only 笔记本上 720p 采集是白烧 CPU（sword-control 实证）
@@ -266,6 +270,7 @@ export class HandTracker {
       await this.video.play();
       this.running = true;
       this._retries = 0;
+      this._stage('摄像头已就绪，挥手即可！');
       // 展厅亮光应对：摄像头支持手动曝光就压低补偿（多数消费级摄像头会静默忽略）
       try {
         const [vtrack] = this.stream.getVideoTracks();
